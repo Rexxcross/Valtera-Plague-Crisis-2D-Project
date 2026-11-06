@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Valtera-Plague-Crisis-2D-Project.slnx"
+    "dotnet.defaultSolution": "Valtera Plague Crisis.slnx"
 }
