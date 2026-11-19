@@ -1,12 +1,15 @@
+
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 public class PlayerSweep : MonoBehaviour
 {
     [Header("Contamination Manager")]
     [SerializeField] private ContaminationGaugeManager contaminationManager;
+
     private bool sweepInProgress = false;
 
     [Header("Interaksi")]
@@ -17,6 +20,18 @@ public class PlayerSweep : MonoBehaviour
     [SerializeField] private Vector3 uiOffset =
         new Vector3(0f, 1.2f, 0f);
 
+    [Header("Cleaning SFX")]
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip cleaningSFX;
+
+    [Header("Sector Completion")]
+    [SerializeField] private GameObject sectorCompletePanel;
+
+    [SerializeField] private string sectorSelectionSceneName =
+        "SectorSelection";
+
+    private bool sectorCompleted = false;
+
     [Header("Progress Keseluruhan")]
     [SerializeField, Min(1)]
     private int totalDustRequired = 5;
@@ -25,6 +40,11 @@ public class PlayerSweep : MonoBehaviour
 
     private SweepableArea currentArea;
     private int cleanedDust = 0;
+
+
+    // =====================================
+    // START
+    // =====================================
 
     private void Start()
     {
@@ -48,14 +68,28 @@ public class PlayerSweep : MonoBehaviour
         if (contaminationManager == null)
         {
             contaminationManager =
-            FindAnyObjectByType<ContaminationGaugeManager>();
+                FindAnyObjectByType<ContaminationGaugeManager>();
+        }
+
+        if (sectorCompletePanel != null)
+        {
+            sectorCompletePanel.SetActive(false);
         }
 
         UpdateProgressText();
     }
 
+
+    // =====================================
+    // UPDATE
+    // =====================================
+
     private void Update()
     {
+        // Jangan jalankan mekanik setelah sektor selesai.
+        if (sectorCompleted)
+            return;
+
         if (currentArea != null && currentArea.IsCleaned)
             currentArea = null;
 
@@ -64,7 +98,7 @@ public class PlayerSweep : MonoBehaviour
             Keyboard.current != null &&
             Keyboard.current.eKey.isPressed;
 
-        if (currentArea != null)    
+        if (currentArea != null)
         {
             if (holdingE)
             {
@@ -74,11 +108,13 @@ public class PlayerSweep : MonoBehaviour
                     contaminationManager.RegisterActivity();
 
                 SweepableArea area = currentArea;
+
                 bool completed = area.Sweep(Time.deltaTime);
 
                 if (sweepSlider != null)
                     sweepSlider.value = area.Progress01;
 
+                // Debu selesai dibersihkan.
                 if (completed)
                 {
                     cleanedDust = Mathf.Min(
@@ -86,23 +122,47 @@ public class PlayerSweep : MonoBehaviour
                         totalDustRequired
                     );
 
+                    // Putar SFX.
+                    if (audioSource != null && cleaningSFX != null)
+                    {
+                        audioSource.PlayOneShot(cleaningSFX);
+                    }
+
+                    // Kurangi contamination gauge.
                     if (contaminationManager != null)
+                    {
                         contaminationManager.RegisterCleaningSuccess();
+                    }
 
                     currentArea = null;
                     sweepInProgress = false;
 
                     UpdateProgressText();
+
+                    Debug.Log(
+                        "Debu berhasil dibersihkan! " +
+                        cleanedDust + "/" + totalDustRequired
+                    );
+
+                    // Periksa apakah seluruh debu sudah bersih.
+                    if (cleanedDust >= totalDustRequired)
+                    {
+                        CompleteSector();
+                        return;
+                    }
                 }
             }
             else
             {
+                // E dilepas sebelum selesai.
                 if (sweepInProgress)
                 {
                     currentArea.CancelSweep();
 
                     if (contaminationManager != null)
+                    {
                         contaminationManager.RegisterFailedSweep();
+                    }
 
                     sweepInProgress = false;
                 }
@@ -115,12 +175,16 @@ public class PlayerSweep : MonoBehaviour
         UpdateInteractionUI(holdingE);
     }
 
+
+    // =====================================
+    // LATE UPDATE - POSISI UI
+    // =====================================
+
     private void LateUpdate()
     {
         if (mainCamera == null)
             return;
 
-        // Tempatkan UI di atas kepala Player.
         Vector3 screenPosition =
             mainCamera.WorldToScreenPoint(
                 transform.position + uiOffset
@@ -138,8 +202,16 @@ public class PlayerSweep : MonoBehaviour
         }
     }
 
+
+    // =====================================
+    // TRIGGER ENTER
+    // =====================================
+
     private void OnTriggerEnter2D(Collider2D other)
     {
+        if (sectorCompleted)
+            return;
+
         SweepableArea area =
             other.GetComponentInParent<SweepableArea>();
 
@@ -148,6 +220,11 @@ public class PlayerSweep : MonoBehaviour
             currentArea = area;
         }
     }
+
+
+    // =====================================
+    // TRIGGER EXIT
+    // =====================================
 
     private void OnTriggerExit2D(Collider2D other)
     {
@@ -159,10 +236,13 @@ public class PlayerSweep : MonoBehaviour
             if (sweepInProgress)
             {
                 if (contaminationManager != null)
+                {
                     contaminationManager.RegisterFailedSweep();
+                }
             }
 
             area.CancelSweep();
+
             currentArea = null;
             sweepInProgress = false;
 
@@ -173,9 +253,16 @@ public class PlayerSweep : MonoBehaviour
             }
 
             if (interactionText != null)
+            {
                 interactionText.gameObject.SetActive(false);
+            }
         }
     }
+
+
+    // =====================================
+    // UPDATE INTERACTION UI
+    // =====================================
 
     private void UpdateInteractionUI(bool holdingE)
     {
@@ -188,15 +275,24 @@ public class PlayerSweep : MonoBehaviour
         if (interactionText != null)
         {
             if (interactionText.gameObject.activeSelf != showPrompt)
+            {
                 interactionText.gameObject.SetActive(showPrompt);
+            }
         }
 
         if (sweepSlider != null)
         {
             if (sweepSlider.gameObject.activeSelf != showSlider)
+            {
                 sweepSlider.gameObject.SetActive(showSlider);
+            }
         }
     }
+
+
+    // =====================================
+    // UPDATE PROGRESS TEXT
+    // =====================================
 
     private void UpdateProgressText()
     {
@@ -207,7 +303,62 @@ public class PlayerSweep : MonoBehaviour
         if (progressText != null)
         {
             progressText.text =
-                $"Progress: {percentage}% ";
+                $"Progress: {percentage}%";
         }
+    }
+
+
+    // =====================================
+    // SECTOR COMPLETED
+    // =====================================
+
+    private void CompleteSector()
+    {
+        if (sectorCompleted)
+            return;
+
+        sectorCompleted = true;
+
+        Debug.Log(
+            "SECTOR COMPLETED! Semua debu berhasil dibersihkan."
+        );
+
+        // Sembunyikan UI interaksi.
+        if (interactionText != null)
+            interactionText.gameObject.SetActive(false);
+
+        if (sweepSlider != null)
+            sweepSlider.gameObject.SetActive(false);
+
+        // Tampilkan panel Sector Complete.
+        if (sectorCompletePanel != null)
+        {
+            sectorCompletePanel.SetActive(true);
+        }
+        else
+        {
+            Debug.LogWarning(
+                "Sector Complete Panel belum dihubungkan!"
+            );
+        }
+
+        // Hentikan permainan sementara.
+        Time.timeScale = 0f;
+    }
+
+
+    // =====================================
+    // NEXT SECTOR - SECTOR SELECTION
+    // =====================================
+
+    public void NextSector()
+    {
+        Debug.Log("Menuju Sector Selection.");
+
+        // Aktifkan kembali waktu permainan.
+        Time.timeScale = 1f;
+
+        // Pindah ke halaman pemilihan sektor.
+        SceneManager.LoadScene(sectorSelectionSceneName);
     }
 }
