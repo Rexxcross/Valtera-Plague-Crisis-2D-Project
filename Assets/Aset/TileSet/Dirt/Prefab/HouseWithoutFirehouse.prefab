@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 6762640615834501393}
   - component: {fileID: 8706994575144759977}
   - component: {fileID: 5268385945187512082}
+  - component: {fileID: 6178852642523304309}
   m_Layer: 0
   m_Name: HouseWithoutFirehouse
   m_TagString: Untagged
@@ -100,6 +101,52 @@ BoxCollider2D:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4867043979036888272}
+  m_Enabled: 0
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0.61707973, y: -0.6017258}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 6.9375, y: 8.625}
+    newSize: {x: 6.9375, y: 8.625}
+    adaptiveTilingThreshold: 0.5
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 5.51392, y: 4.154042}
+  m_EdgeRadius: 0
+--- !u!60 &6178852642523304309
+PolygonCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4867043979036888272}
   m_Enabled: 1
   serializedVersion: 3
   m_Density: 1
@@ -127,7 +174,7 @@ BoxCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0.02367735, y: 0.81687665}
+  m_Offset: {x: 0, y: 0}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
@@ -137,5 +184,38 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 6.7007246, y: 6.9912467}
-  m_EdgeRadius: 0
+  m_Points:
+    m_Paths:
+    - - {x: 3.0525389, y: -2.440257}
+      - {x: 3.042242, y: -2.026108}
+      - {x: 2.782629, y: -2.0096135}
+      - {x: 1.9694452, y: -2.160709}
+      - {x: 1.9660044, y: -1.5}
+      - {x: 1.9728737, y: -0.7891493}
+      - {x: 1.9721899, y: 0.5494461}
+      - {x: 0.92206097, y: 0.6023445}
+      - {x: 0.5429373, y: 0.5570226}
+      - {x: 0.18167496, y: 0.60510254}
+      - {x: -0.36914968, y: 0.5886202}
+      - {x: -0.8293171, y: 0.5851917}
+      - {x: -1.6486859, y: 0.5851922}
+      - {x: -2.180284, y: 0.5961714}
+      - {x: -2.0333118, y: -0.050117016}
+      - {x: -2.0765848, y: -0.22525883}
+      - {x: -2.101997, y: -0.61331224}
+      - {x: -2.115734, y: -0.9464183}
+      - {x: -2.1019974, y: -1.1627707}
+      - {x: -2.0999355, y: -1.3708763}
+      - {x: -2.21875, y: -1.4375}
+      - {x: -2.5126877, y: -1.8454642}
+      - {x: -3.2558374, y: -1.7898326}
+      - {x: -2.9426546, y: -1.9402447}
+      - {x: -3.2276802, y: -1.8351674}
+      - {x: -3.2276797, y: -3.0528862}
+      - {x: -2.7943034, y: -3.1105795}
+      - {x: -2.0882597, y: -2.9134662}
+      - {x: -0.72082424, y: -2.7809143}
+      - {x: 0.96598005, y: -2.8063266}
+      - {x: 1.5229902, y: -2.8289943}
+      - {x: 2.2695742, y: -2.8289948}
+  m_UseDelaunayMesh: 1
