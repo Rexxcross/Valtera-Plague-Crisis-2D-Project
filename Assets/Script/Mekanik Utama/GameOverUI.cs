@@ -8,7 +8,23 @@ public class GameOverUI : MonoBehaviour
 
 
     // =====================================
-    // RETRY SEKTOR SAAT INI
+    // ULANG DARI AWAL (BAD ENDING & GAME OVER)
+    // =====================================
+
+    // Kembali ke sektor tempat permainan dimulai,
+    // dengan Global Gauge direset.
+    public void RestartFromBeginning()
+    {
+        Time.timeScale = 1f;
+
+        ContaminationGaugeManager.ResetGlobalProgress();
+
+        SceneManager.LoadScene(GameProgress.RunStartScene);
+    }
+
+
+    // =====================================
+    // ULANG DARI SEKTOR (GAME OVER)
     // =====================================
 
     public void RetryCurrentSector()
@@ -16,12 +32,12 @@ public class GameOverUI : MonoBehaviour
         string currentScene =
             SceneManager.GetActiveScene().name;
 
-        Debug.Log("Mengulang sektor: " + currentScene);
-
-        // Kembalikan waktu normal.
         Time.timeScale = 1f;
 
-        // Muat ulang scene yang sedang dimainkan.
+        // Kembalikan Global ke nilai saat sektor dimulai,
+        // agar kegagalan tadi tidak ikut terbawa.
+        ContaminationGaugeManager.RestoreGlobalToSectorStart();
+
         SceneManager.LoadScene(currentScene);
     }
 
@@ -32,8 +48,6 @@ public class GameOverUI : MonoBehaviour
 
     public void BackToMainMenu()
     {
-        Debug.Log("Kembali ke Main Menu.");
-
         Time.timeScale = 1f;
 
         SceneManager.LoadScene(mainMenuSceneName);
@@ -46,8 +60,6 @@ public class GameOverUI : MonoBehaviour
 
     public void ExitGame()
     {
-        Debug.Log("Keluar dari permainan.");
-
         Time.timeScale = 1f;
 
         #if UNITY_EDITOR

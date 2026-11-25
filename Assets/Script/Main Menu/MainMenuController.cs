@@ -17,6 +17,9 @@ public class MainMenuController : MonoBehaviour
         // Reset Global Gauge untuk permainan baru.
         ContaminationGaugeManager.ResetGlobalProgress();
 
+        // Permainan baru: sektor awal akan dicatat saat pemain memilih sektor.
+        GameProgress.BeginNewRun();
+
         SceneManager.LoadScene("SectorSelection");
     }
 
