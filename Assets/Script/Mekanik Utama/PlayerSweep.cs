@@ -1,4 +1,3 @@
-
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -13,6 +12,8 @@ public class PlayerSweep : MonoBehaviour
     private bool sweepInProgress = false;
 
     [Header("Interaksi")]
+    [Tooltip("Wadah prompt (latar + teks + slider). Jika diisi, wadah inilah yang mengikuti Player.")]
+    [SerializeField] private RectTransform promptRoot;
     [SerializeField] private TMP_Text interactionText;
     [SerializeField] private Slider sweepSlider;
     [SerializeField] private Camera mainCamera;
@@ -26,6 +27,7 @@ public class PlayerSweep : MonoBehaviour
 
     [Header("Sector Completion")]
     [SerializeField] private GameObject sectorCompletePanel;
+    [SerializeField] private TMP_Text victoryStatsText;
 
     [SerializeField] private string sectorSelectionSceneName =
         "SectorSelection";
@@ -33,6 +35,9 @@ public class PlayerSweep : MonoBehaviour
     private bool sectorCompleted = false;
 
     [Header("Progress Keseluruhan")]
+    [Tooltip("Jika dicentang, jumlah debu dihitung otomatis dari SweepableArea di scene.")]
+    [SerializeField] private bool autoCountDust = true;
+
     [SerializeField, Min(1)]
     private int totalDustRequired = 5;
 
@@ -48,10 +53,19 @@ public class PlayerSweep : MonoBehaviour
 
     private void Start()
     {
+        if (autoCountDust)
+        {
+            totalDustRequired = FindObjectsByType<SweepableArea>(
+                FindObjectsSortMode.None).Length;
+        }
+
         totalDustRequired = Mathf.Max(1, totalDustRequired);
 
         if (mainCamera == null)
             mainCamera = Camera.main;
+
+        if (promptRoot != null)
+            promptRoot.gameObject.SetActive(false);
 
         if (interactionText != null)
             interactionText.gameObject.SetActive(false);
@@ -86,9 +100,16 @@ public class PlayerSweep : MonoBehaviour
 
     private void Update()
     {
-        // Jangan jalankan mekanik setelah sektor selesai.
+        // Jangan jalankan mekanik setelah sektor selesai / game over.
         if (sectorCompleted)
             return;
+
+        if (contaminationManager != null &&
+            contaminationManager.IsGameOver)
+        {
+            HidePrompt();
+            return;
+        }
 
         if (currentArea != null && currentArea.IsCleaned)
             currentArea = null;
@@ -139,11 +160,6 @@ public class PlayerSweep : MonoBehaviour
 
                     UpdateProgressText();
 
-                    Debug.Log(
-                        "Debu berhasil dibersihkan! " +
-                        cleanedDust + "/" + totalDustRequired
-                    );
-
                     // Periksa apakah seluruh debu sudah bersih.
                     if (cleanedDust >= totalDustRequired)
                     {
@@ -190,6 +206,13 @@ public class PlayerSweep : MonoBehaviour
                 transform.position + uiOffset
             );
 
+        if (promptRoot != null)
+        {
+            promptRoot.position = screenPosition;
+            return;
+        }
+
+        // Cara lama: teks dan slider bergerak sendiri-sendiri.
         if (interactionText != null)
         {
             interactionText.transform.position = screenPosition;
@@ -204,7 +227,7 @@ public class PlayerSweep : MonoBehaviour
 
 
     // =====================================
-    // TRIGGER ENTER
+    // TRIGGER ENTER / STAY / EXIT
     // =====================================
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -221,10 +244,21 @@ public class PlayerSweep : MonoBehaviour
         }
     }
 
+    // Jika debu sebelumnya selesai dibersihkan saat Player masih
+    // berdiri di dekat debu lain, ambil debu berikutnya.
+    private void OnTriggerStay2D(Collider2D other)
+    {
+        if (sectorCompleted || currentArea != null)
+            return;
 
-    // =====================================
-    // TRIGGER EXIT
-    // =====================================
+        SweepableArea area =
+            other.GetComponentInParent<SweepableArea>();
+
+        if (area != null && !area.IsCleaned)
+        {
+            currentArea = area;
+        }
+    }
 
     private void OnTriggerExit2D(Collider2D other)
     {
@@ -233,12 +267,9 @@ public class PlayerSweep : MonoBehaviour
 
         if (area != null && currentArea == area)
         {
-            if (sweepInProgress)
+            if (sweepInProgress && contaminationManager != null)
             {
-                if (contaminationManager != null)
-                {
-                    contaminationManager.RegisterFailedSweep();
-                }
+                contaminationManager.RegisterFailedSweep();
             }
 
             area.CancelSweep();
@@ -247,15 +278,9 @@ public class PlayerSweep : MonoBehaviour
             sweepInProgress = false;
 
             if (sweepSlider != null)
-            {
                 sweepSlider.value = 0f;
-                sweepSlider.gameObject.SetActive(false);
-            }
 
-            if (interactionText != null)
-            {
-                interactionText.gameObject.SetActive(false);
-            }
+            HidePrompt();
         }
     }
 
@@ -272,20 +297,26 @@ public class PlayerSweep : MonoBehaviour
         bool showPrompt = nearDust && !holdingE;
         bool showSlider = nearDust && holdingE;
 
-        if (interactionText != null)
-        {
-            if (interactionText.gameObject.activeSelf != showPrompt)
-            {
-                interactionText.gameObject.SetActive(showPrompt);
-            }
-        }
+        if (promptRoot != null)
+            SetActive(promptRoot, nearDust);
 
-        if (sweepSlider != null)
+        SetActive(interactionText, showPrompt);
+        SetActive(sweepSlider, showSlider);
+    }
+
+    private void HidePrompt()
+    {
+        SetActive(promptRoot, false);
+        SetActive(interactionText, false);
+        SetActive(sweepSlider, false);
+    }
+
+    private static void SetActive(Component target, bool active)
+    {
+        if (target != null &&
+            target.gameObject.activeSelf != active)
         {
-            if (sweepSlider.gameObject.activeSelf != showSlider)
-            {
-                sweepSlider.gameObject.SetActive(showSlider);
-            }
+            target.gameObject.SetActive(active);
         }
     }
 
@@ -296,20 +327,16 @@ public class PlayerSweep : MonoBehaviour
 
     private void UpdateProgressText()
     {
-        int percentage = Mathf.RoundToInt(
-            cleanedDust / (float)totalDustRequired * 100f
-        );
-
         if (progressText != null)
         {
             progressText.text =
-                $"Progress: {percentage}%";
+                $"Kotoran {cleanedDust}/{totalDustRequired}";
         }
     }
 
 
     // =====================================
-    // SECTOR COMPLETED
+    // SECTOR COMPLETED (VICTORY)
     // =====================================
 
     private void CompleteSector()
@@ -317,23 +344,33 @@ public class PlayerSweep : MonoBehaviour
         if (sectorCompleted)
             return;
 
+        // Jika Game Over sudah terjadi lebih dulu, abaikan.
+        if (contaminationManager != null &&
+            contaminationManager.IsGameOver)
+            return;
+
         sectorCompleted = true;
 
         Debug.Log(
-            "SECTOR COMPLETED! Semua debu berhasil dibersihkan."
+            "VICTORY! Semua debu berhasil dibersihkan."
         );
 
-        // Sembunyikan UI interaksi.
-        if (interactionText != null)
-            interactionText.gameObject.SetActive(false);
+        // Buka sektor berikutnya (tersimpan).
+        GameProgress.CompleteSector(
+            SceneManager.GetActiveScene().name);
 
-        if (sweepSlider != null)
-            sweepSlider.gameObject.SetActive(false);
+        if (contaminationManager != null)
+            contaminationManager.StopSector();
 
-        // Tampilkan panel Sector Complete.
+        HidePrompt();
+
+        if (victoryStatsText != null && contaminationManager != null)
+            victoryStatsText.text = contaminationManager.BuildStatsLine();
+
+        // Tampilkan panel Victory.
         if (sectorCompletePanel != null)
         {
-            sectorCompletePanel.SetActive(true);
+            StartCoroutine(PanelFader.FadeIn(sectorCompletePanel));
         }
         else
         {
@@ -348,17 +385,13 @@ public class PlayerSweep : MonoBehaviour
 
 
     // =====================================
-    // NEXT SECTOR - SECTOR SELECTION
+    // NEXT SECTOR
     // =====================================
 
+    // Lanjut ke sektor berikutnya jika sudah ada, jika belum
+    // kembali ke Sector Selection.
     public void NextSector()
     {
-        Debug.Log("Menuju Sector Selection.");
-
-        // Aktifkan kembali waktu permainan.
-        Time.timeScale = 1f;
-
-        // Pindah ke halaman pemilihan sektor.
-        SceneManager.LoadScene(sectorSelectionSceneName);
+        GameProgress.LoadNextSectorOrSelection();
     }
 }

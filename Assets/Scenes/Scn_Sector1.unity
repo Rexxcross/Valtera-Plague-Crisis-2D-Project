@@ -175815,6 +175815,17 @@ MonoBehaviour:
   globalGaugeText: {fileID: 288683002}
   localGaugeFill: {fileID: 1011265835}
   localGaugeText: {fileID: 2057927525}
+  lowColor: {r: 0.31, g: 0.54, b: 0.17, a: 1}
+  midColor: {r: 0.79, g: 0.76, b: 0.23, a: 1}
+  highColor: {r: 0.85, g: 0.33, b: 0.31, a: 1}
+  fillSmoothSpeed: 60
+  criticalThreshold: 75
+  criticalRiseMultiplier: 1.5
+  warningChip: {fileID: 0}
+  comboText: {fileID: 0}
+  comboWindow: 8
+  maxCombo: 5
+  comboBonusPerLevel: 0.25
   globalStartingContamination: 0
   localStartingContamination: 0
   globalRisePerSecond: 0.4
@@ -175832,7 +175843,9 @@ MonoBehaviour:
   globalDecreasePerClean: 2
   localDecreasePerClean: 12
   badEndingPanel: {fileID: 1953741558}
+  badEndingStatsText: {fileID: 0}
   localGameOverPanel: {fileID: 1489302217}
+  gameOverStatsText: {fileID: 0}
 --- !u!4 &474451965
 Transform:
   m_ObjectHideFlags: 0
@@ -176630,6 +176643,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SweepableArea
   secondsToClean: 2
+  minAlpha: 0.3
 --- !u!61 &696077779
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -344170,6 +344184,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SweepableArea
   secondsToClean: 2
+  minAlpha: 0.3
 --- !u!61 &1160987622
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -345183,6 +345198,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSweep
   contaminationManager: {fileID: 0}
+  promptRoot: {fileID: 0}
   interactionText: {fileID: 690690622}
   sweepSlider: {fileID: 1390494196}
   mainCamera: {fileID: 1129788755}
@@ -345190,7 +345206,9 @@ MonoBehaviour:
   audioSource: {fileID: 1528455356}
   cleaningSFX: {fileID: 8300000, guid: a06406f9c5f8c7546afde7827155e3ce, type: 3}
   sectorCompletePanel: {fileID: 1767670062}
+  victoryStatsText: {fileID: 0}
   sectorSelectionSceneName: SectorSelection
+  autoCountDust: 1
   totalDustRequired: 5
   progressText: {fileID: 1236635686}
 --- !u!61 &1528455349
@@ -346015,6 +346033,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SweepableArea
   secondsToClean: 2
+  minAlpha: 0.3
 --- !u!61 &1644089666
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -346826,6 +346845,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SweepableArea
   secondsToClean: 2
+  minAlpha: 0.3
 --- !u!61 &1989024905
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -347121,6 +347141,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SweepableArea
   secondsToClean: 2
+  minAlpha: 0.3
 --- !u!61 &2076403447
 BoxCollider2D:
   m_ObjectHideFlags: 0

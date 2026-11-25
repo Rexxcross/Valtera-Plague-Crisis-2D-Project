@@ -11,19 +11,32 @@ public class ContaminationGaugeManager : MonoBehaviour
     private static float savedGlobalContamination = 0f;
     private static bool globalProgressInitialized = false;
 
+    // Nilai Global saat sektor dimulai (untuk "Ulang dari Sektor").
+    private static float globalAtSectorStart = 0f;
+
     [RuntimeInitializeOnLoadMethod(
         RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeData()
     {
         savedGlobalContamination = 0f;
         globalProgressInitialized = false;
+        globalAtSectorStart = 0f;
     }
 
-    // Dipanggil ketika memulai permainan baru dari Main Menu.
+    // Dipanggil ketika memulai permainan baru (Main Menu / Ulang dari Awal).
     public static void ResetGlobalProgress()
     {
         savedGlobalContamination = 0f;
         globalProgressInitialized = false;
+        globalAtSectorStart = 0f;
+    }
+
+    // Dipanggil sebelum mengulang sektor, agar Global tidak
+    // terbawa naik dari percobaan yang gagal.
+    public static void RestoreGlobalToSectorStart()
+    {
+        savedGlobalContamination = globalAtSectorStart;
+        globalProgressInitialized = true;
     }
 
 
@@ -43,6 +56,58 @@ public class ContaminationGaugeManager : MonoBehaviour
     [Header("UI Gauge Lokal")]
     [SerializeField] private Image localGaugeFill;
     [SerializeField] private TMP_Text localGaugeText;
+
+
+    // =====================================
+    // TAMPILAN GAUGE
+    // =====================================
+
+    [Header("Warna Gauge (rendah - sedang - tinggi)")]
+    [SerializeField] private Color lowColor =
+        new Color(0.31f, 0.54f, 0.17f);
+
+    [SerializeField] private Color midColor =
+        new Color(0.79f, 0.76f, 0.23f);
+
+    [SerializeField] private Color highColor =
+        new Color(0.85f, 0.33f, 0.31f);
+
+    [SerializeField, Min(1f)]
+    private float fillSmoothSpeed = 60f;
+
+
+    // =====================================
+    // PERINGATAN KRITIS
+    // =====================================
+
+    [Header("Peringatan Kritis")]
+
+    [SerializeField, Range(0f, 100f)]
+    private float criticalThreshold = 75f;
+
+    [Tooltip("Di atas ambang kritis, gauge naik lebih cepat. Isi 1 untuk mematikan.")]
+    [SerializeField, Min(1f)]
+    private float criticalRiseMultiplier = 1.5f;
+
+    [SerializeField] private CanvasGroup warningChip;
+
+
+    // =====================================
+    // KOMBO
+    // =====================================
+
+    [Header("Kombo Membersihkan")]
+    [SerializeField] private TMP_Text comboText;
+
+    [SerializeField, Min(0f)]
+    private float comboWindow = 8f;
+
+    [SerializeField, Min(1)]
+    private int maxCombo = 5;
+
+    [Tooltip("Tambahan pengurangan gauge per level kombo (0.25 = +25%)")]
+    [SerializeField, Min(0f)]
+    private float comboBonusPerLevel = 0.25f;
 
 
     // =====================================
@@ -136,9 +201,11 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     [Header("Bad Ending - Global 100%")]
     [SerializeField] private GameObject badEndingPanel;
+    [SerializeField] private TMP_Text badEndingStatsText;
 
-    [Header("Sector Failed - Local 100%")]
+    [Header("Game Over - Local 100%")]
     [SerializeField] private GameObject localGameOverPanel;
+    [SerializeField] private TMP_Text gameOverStatsText;
 
 
     // =====================================
@@ -146,12 +213,33 @@ public class ContaminationGaugeManager : MonoBehaviour
     // =====================================
 
     private bool isGameOver = false;
+    private bool sectorEnded = false;
 
     private Vector3 lastPlayerPosition;
-
     private float idleTimer;
-
     private float failureBoostTimer;
+
+    private float shownGlobal;
+    private float shownLocal;
+    private int lastGlobalText = -1;
+    private int lastLocalText = -1;
+
+    private int combo = 0;
+    private float lastCleanTime;
+
+    private float elapsedTime = 0f;
+    private int cleanCount = 0;
+
+
+    // =====================================
+    // PROPERTI PUBLIK
+    // =====================================
+
+    public bool IsGameOver => isGameOver;
+    public float GlobalValue => globalContamination;
+    public float LocalValue => localContamination;
+    public float ElapsedTime => elapsedTime;
+    public int CleanCount => cleanCount;
 
 
     // =====================================
@@ -181,12 +269,18 @@ public class ContaminationGaugeManager : MonoBehaviour
             100f
         );
 
+        // Catat Global saat sektor dimulai.
+        globalAtSectorStart = globalContamination;
+
         // Local Gauge menggunakan nilai awal sektor.
         localContamination = Mathf.Clamp(
             localStartingContamination,
             0f,
             100f
         );
+
+        shownGlobal = globalContamination;
+        shownLocal = localContamination;
 
         // Cari Player secara otomatis jika belum diisi.
         if (player == null)
@@ -215,14 +309,18 @@ public class ContaminationGaugeManager : MonoBehaviour
         SetupFillImage(globalGaugeFill);
         SetupFillImage(localGaugeFill);
 
-        // Sembunyikan kedua panel saat awal.
+        // Sembunyikan panel dan peringatan saat awal.
         if (badEndingPanel != null)
             badEndingPanel.SetActive(false);
 
         if (localGameOverPanel != null)
             localGameOverPanel.SetActive(false);
 
-        UpdateGaugeUI();
+        if (warningChip != null)
+            warningChip.alpha = 0f;
+
+        UpdateComboUI();
+        AnimateUI();
 
         // Periksa apakah Global atau Lokal sudah penuh.
         CheckGameOver();
@@ -235,37 +333,38 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     private void Update()
     {
-        if (isGameOver)
+        // Animasi UI selalu berjalan (memakai unscaled time).
+        AnimateUI();
+
+        if (isGameOver || sectorEnded)
             return;
 
         float deltaTime = Time.deltaTime;
+
+        elapsedTime += deltaTime;
+
+        UpdateComboExpiry();
 
         // Periksa aktivitas Player.
         UpdateIdleTimer(deltaTime);
 
         bool isIdle = idleTimer >= idleGracePeriod;
-
         bool failureBoostActive = failureBoostTimer > 0f;
 
         float globalRate = globalRisePerSecond;
-
         float localRate = localRisePerSecond;
-
 
         // Tambahan kenaikan jika Player terlalu lama diam.
         if (isIdle)
         {
             globalRate += idleGlobalBonusPerSecond;
-
             localRate += idleLocalBonusPerSecond;
         }
-
 
         // Tambahan kenaikan setelah gagal menyapu.
         if (failureBoostActive)
         {
             globalRate += failureGlobalBonusPerSecond;
-
             localRate += failureLocalBonusPerSecond;
 
             failureBoostTimer = Mathf.Max(
@@ -274,28 +373,26 @@ public class ContaminationGaugeManager : MonoBehaviour
             );
         }
 
+        // Di atas ambang kritis, gauge naik lebih cepat.
+        if (globalContamination >= criticalThreshold)
+            globalRate *= criticalRiseMultiplier;
 
-        // Naikkan Global Gauge.
+        if (localContamination >= criticalThreshold)
+            localRate *= criticalRiseMultiplier;
+
         globalContamination = Mathf.Clamp(
             globalContamination + globalRate * deltaTime,
             0f,
             100f
         );
 
-
-        // Naikkan Local Gauge.
         localContamination = Mathf.Clamp(
             localContamination + localRate * deltaTime,
             0f,
             100f
         );
 
-
-        // Simpan Global Gauge.
         SaveGlobalProgress();
-
-        // Perbarui tampilan.
-        UpdateGaugeUI();
 
         // Periksa Game Over.
         CheckGameOver();
@@ -319,7 +416,6 @@ public class ContaminationGaugeManager : MonoBehaviour
         {
             // Player bergerak.
             idleTimer = 0f;
-
             lastPlayerPosition = player.position;
         }
         else
@@ -336,7 +432,7 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     public void RegisterActivity()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
         idleTimer = 0f;
@@ -354,17 +450,15 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     public void RegisterFailedSweep()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
-        // Penalti Global.
         globalContamination = Mathf.Clamp(
             globalContamination + failedGlobalPenalty,
             0f,
             100f
         );
 
-        // Penalti Lokal.
         localContamination = Mathf.Clamp(
             localContamination + failedLocalPenalty,
             0f,
@@ -374,11 +468,11 @@ public class ContaminationGaugeManager : MonoBehaviour
         // Aktifkan kenaikan tambahan sementara.
         failureBoostTimer = failureBoostDuration;
 
+        // Gagal memutus kombo.
+        combo = 0;
+        UpdateComboUI();
+
         SaveGlobalProgress();
-
-        UpdateGaugeUI();
-
-        Debug.Log("Gagal menyapu! Kontaminasi meningkat.");
 
         CheckGameOver();
     }
@@ -390,30 +484,72 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     public void RegisterCleaningSuccess()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
-        // Kurangi Global.
+        // Kombo: bersihkan berturut-turut agar pengurangan makin besar.
+        if (combo > 0 && Time.time - lastCleanTime > comboWindow)
+            combo = 0;
+
+        combo = Mathf.Min(combo + 1, maxCombo);
+        lastCleanTime = Time.time;
+
+        float multiplier = 1f + (combo - 1) * comboBonusPerLevel;
+
         globalContamination = Mathf.Clamp(
-            globalContamination - globalDecreasePerClean,
+            globalContamination - globalDecreasePerClean * multiplier,
             0f,
             100f
         );
 
-        // Kurangi Lokal.
         localContamination = Mathf.Clamp(
-            localContamination - localDecreasePerClean,
+            localContamination - localDecreasePerClean * multiplier,
             0f,
             100f
         );
+
+        cleanCount++;
+
+        UpdateComboUI();
 
         RegisterActivity();
 
         SaveGlobalProgress();
+    }
 
-        UpdateGaugeUI();
 
-        Debug.Log("Kontaminasi berhasil dikurangi!");
+    // =====================================
+    // SEKTOR SELESAI (DIPANGGIL PlayerSweep)
+    // =====================================
+
+    public void StopSector()
+    {
+        sectorEnded = true;
+
+        SaveGlobalProgress();
+        SnapUI();
+    }
+
+
+    // =====================================
+    // KOMBO
+    // =====================================
+
+    private void UpdateComboExpiry()
+    {
+        if (combo > 0 && Time.time - lastCleanTime > comboWindow)
+        {
+            combo = 0;
+            UpdateComboUI();
+        }
+    }
+
+    private void UpdateComboUI()
+    {
+        if (comboText == null)
+            return;
+
+        comboText.text = combo > 1 ? "KOMBO ×" + combo : "";
     }
 
 
@@ -454,7 +590,7 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     private void TriggerBadEnding()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
         isGameOver = true;
@@ -462,17 +598,41 @@ public class ContaminationGaugeManager : MonoBehaviour
         globalContamination = 100f;
 
         SaveGlobalProgress();
+        SnapUI();
 
-        UpdateGaugeUI();
+        Debug.Log("BAD ENDING! Global Contamination mencapai 100%.");
 
-        Debug.Log(
-            "BAD ENDING! Global Contamination mencapai 100%."
-        );
+        ShowEndPanel(badEndingPanel, badEndingStatsText);
+    }
 
-        if (badEndingPanel != null)
-        {
-            badEndingPanel.SetActive(true);
-        }
+
+    // =====================================
+    // GAME OVER - LOCAL 100%
+    // =====================================
+
+    private void TriggerLocalGameOver()
+    {
+        if (isGameOver || sectorEnded)
+            return;
+
+        isGameOver = true;
+
+        localContamination = 100f;
+
+        SnapUI();
+
+        Debug.Log("GAME OVER! Local Contamination mencapai 100%.");
+
+        ShowEndPanel(localGameOverPanel, gameOverStatsText);
+    }
+
+    private void ShowEndPanel(GameObject panel, TMP_Text statsText)
+    {
+        if (statsText != null)
+            statsText.text = BuildStatsLine();
+
+        if (panel != null)
+            StartCoroutine(PanelFader.FadeIn(panel));
 
         // Hentikan permainan.
         Time.timeScale = 0f;
@@ -480,31 +640,17 @@ public class ContaminationGaugeManager : MonoBehaviour
 
 
     // =====================================
-    // SECTOR FAILED - LOCAL 100%
+    // STATISTIK UNTUK LAYAR AKHIR
     // =====================================
 
-    private void TriggerLocalGameOver()
+    public string BuildStatsLine()
     {
-        if (isGameOver)
-            return;
+        int seconds = Mathf.FloorToInt(elapsedTime);
 
-        isGameOver = true;
-
-        localContamination = 100f;
-
-        UpdateGaugeUI();
-
-        Debug.Log(
-            "SECTOR FAILED! Local Contamination mencapai 100%."
-        );
-
-        if (localGameOverPanel != null)
-        {
-            localGameOverPanel.SetActive(true);
-        }
-
-        // Hentikan permainan.
-        Time.timeScale = 0f;
+        return
+            $"Kotoran bersih  {cleanCount}" +
+            $"        Waktu  {seconds / 60:00}:{seconds % 60:00}" +
+            $"        Gauge Global  {Mathf.RoundToInt(globalContamination)}%";
     }
 
 
@@ -521,43 +667,76 @@ public class ContaminationGaugeManager : MonoBehaviour
 
         fillImage.fillMethod = Image.FillMethod.Horizontal;
 
-        fillImage.fillOrigin =
-            (int)Image.OriginHorizontal.Left;
+        fillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
     }
 
 
     // =====================================
-    // UPDATE TAMPILAN GAUGE
+    // ANIMASI & TAMPILAN GAUGE
     // =====================================
 
-    private void UpdateGaugeUI()
+    private void SnapUI()
     {
-        // Global Fill.
-        if (globalGaugeFill != null)
+        shownGlobal = globalContamination;
+        shownLocal = localContamination;
+
+        AnimateUI();
+    }
+
+    private void AnimateUI()
+    {
+        float step = fillSmoothSpeed * Time.unscaledDeltaTime;
+
+        shownGlobal = Mathf.MoveTowards(
+            shownGlobal, globalContamination, step);
+
+        shownLocal = Mathf.MoveTowards(
+            shownLocal, localContamination, step);
+
+        ApplyGauge(globalGaugeFill, globalGaugeText,
+            shownGlobal, ref lastGlobalText);
+
+        ApplyGauge(localGaugeFill, localGaugeText,
+            shownLocal, ref lastLocalText);
+
+        // Chip peringatan berdenyut saat Lokal kritis.
+        if (warningChip != null)
         {
-            globalGaugeFill.fillAmount =
-                globalContamination / 100f;
+            bool critical =
+                !isGameOver &&
+                !sectorEnded &&
+                localContamination >= criticalThreshold;
+
+            warningChip.alpha = critical
+                ? 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 6f)
+                : 0f;
+        }
+    }
+
+    private void ApplyGauge(
+        Image fill, TMP_Text label, float value, ref int lastText)
+    {
+        if (fill != null)
+        {
+            fill.fillAmount = value / 100f;
+            fill.color = GaugeColor(value);
         }
 
-        // Lokal Fill.
-        if (localGaugeFill != null)
-        {
-            localGaugeFill.fillAmount =
-                localContamination / 100f;
-        }
+        int rounded = Mathf.RoundToInt(value);
 
-        // Global Text.
-        if (globalGaugeText != null)
+        if (label != null && rounded != lastText)
         {
-            globalGaugeText.text =
-                $"Global: {Mathf.RoundToInt(globalContamination)}%";
+            label.text = rounded + "%";
+            lastText = rounded;
         }
+    }
 
-        // Lokal Text.
-        if (localGaugeText != null)
-        {
-            localGaugeText.text =
-                $"Lokal: {Mathf.RoundToInt(localContamination)}%";
-        }
+    private Color GaugeColor(float value)
+    {
+        float t = Mathf.Clamp01(value / 100f);
+
+        return t < 0.5f
+            ? Color.Lerp(lowColor, midColor, t * 2f)
+            : Color.Lerp(midColor, highColor, (t - 0.5f) * 2f);
     }
 }
