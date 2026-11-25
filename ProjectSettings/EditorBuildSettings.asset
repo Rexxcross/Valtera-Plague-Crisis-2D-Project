@@ -6,17 +6,14 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
-    guid: 8c9cfa26abfee488c85f1582747f6a02
-  - enabled: 1
     path: Assets/Scenes/Scn_MainMenu.unity
     guid: b2d056d8c7677a74c9a3d644bef6486d
   - enabled: 1
     path: Assets/Scenes/SectorSelection.unity
     guid: 53bf3d90ac9ff5d48b60024d8df54d54
   - enabled: 1
-    path: Assets/Scenes/Scn_InGame.unity
-    guid: bac2ea6b7c965c549824b0413f50db4a
+    path: Assets/Scenes/Scn_Sector1.unity
+    guid: 918fccff5f44ff14792c33fb6ee6b2bb
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings: {fileID: 11400000, guid: 2cc4ffcc98ee70b4f987f7a4190c5461, type: 2}

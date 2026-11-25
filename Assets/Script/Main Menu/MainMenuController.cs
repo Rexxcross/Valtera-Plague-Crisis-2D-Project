@@ -1,15 +1,31 @@
-
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class MainMenuController : MonoBehaviour
 {
+    [Header("Settings Panel")]
     [SerializeField] private GameObject settingsPanel;
+
+    // =====================================
+    // START GAME
+    // =====================================
 
     public void StartGame()
     {
+        Time.timeScale = 1f;
+
+        // Reset Global Gauge untuk permainan baru.
+        ContaminationGaugeManager.ResetGlobalProgress();
+
+        // Permainan baru: sektor awal akan dicatat saat pemain memilih sektor.
+        GameProgress.BeginNewRun();
+
         SceneManager.LoadScene("SectorSelection");
     }
+
+    // =====================================
+    // OPEN SETTINGS
+    // =====================================
 
     public void OpenSettings()
     {
@@ -19,6 +35,10 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    // =====================================
+    // CLOSE SETTINGS
+    // =====================================
+
     public void CloseSettings()
     {
         if (settingsPanel != null)
@@ -27,8 +47,20 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    // =====================================
+    // EXIT GAME
+    // =====================================
+
     public void ExitGame()
     {
-        Application.Quit();
+        Debug.Log("Keluar dari permainan.");
+
+        #if UNITY_EDITOR
+            // Hentikan Play Mode saat testing di Unity.
+            UnityEditor.EditorApplication.isPlaying = false;
+        #else
+            // Tutup aplikasi ketika sudah di-build.
+            Application.Quit();
+        #endif
     }
 }

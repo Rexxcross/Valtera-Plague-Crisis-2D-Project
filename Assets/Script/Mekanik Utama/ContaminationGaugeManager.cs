@@ -4,29 +4,147 @@ using TMPro;
 
 public class ContaminationGaugeManager : MonoBehaviour
 {
+    // =====================================
+    // DATA GLOBAL YANG TERSIMPAN ANTAR SCENE
+    // =====================================
+
+    private static float savedGlobalContamination = 0f;
+    private static bool globalProgressInitialized = false;
+
+    // Nilai Global saat sektor dimulai (untuk "Ulang dari Sektor").
+    private static float globalAtSectorStart = 0f;
+
+    [RuntimeInitializeOnLoadMethod(
+        RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetRuntimeData()
+    {
+        savedGlobalContamination = 0f;
+        globalProgressInitialized = false;
+        globalAtSectorStart = 0f;
+    }
+
+    // Dipanggil ketika memulai permainan baru (Main Menu / Ulang dari Awal).
+    public static void ResetGlobalProgress()
+    {
+        savedGlobalContamination = 0f;
+        globalProgressInitialized = false;
+        globalAtSectorStart = 0f;
+    }
+
+    // Dipanggil sebelum mengulang sektor, agar Global tidak
+    // terbawa naik dari percobaan yang gagal.
+    public static void RestoreGlobalToSectorStart()
+    {
+        savedGlobalContamination = globalAtSectorStart;
+        globalProgressInitialized = true;
+    }
+
+
+    // =====================================
+    // UI GAUGE GLOBAL
+    // =====================================
+
     [Header("UI Gauge Global")]
-    [SerializeField] private Slider globalGaugeSlider;
+    [SerializeField] private Image globalGaugeFill;
     [SerializeField] private TMP_Text globalGaugeText;
 
+
+    // =====================================
+    // UI GAUGE LOKAL
+    // =====================================
+
     [Header("UI Gauge Lokal")]
-    [SerializeField] private Slider localGaugeSlider;
+    [SerializeField] private Image localGaugeFill;
     [SerializeField] private TMP_Text localGaugeText;
 
-    [Header("Nilai Awal Gauge (0-100)")]
-    [SerializeField, Range(0f, 100f)]
-    private float globalContamination = 0f;
+
+    // =====================================
+    // TAMPILAN GAUGE
+    // =====================================
+
+    [Header("Warna Gauge (rendah - sedang - tinggi)")]
+    [SerializeField] private Color lowColor =
+        new Color(0.31f, 0.54f, 0.17f);
+
+    [SerializeField] private Color midColor =
+        new Color(0.79f, 0.76f, 0.23f);
+
+    [SerializeField] private Color highColor =
+        new Color(0.85f, 0.33f, 0.31f);
+
+    [SerializeField, Min(1f)]
+    private float fillSmoothSpeed = 60f;
+
+
+    // =====================================
+    // PERINGATAN KRITIS
+    // =====================================
+
+    [Header("Peringatan Kritis")]
 
     [SerializeField, Range(0f, 100f)]
-    private float localContamination = 0f;
+    private float criticalThreshold = 75f;
+
+    [Tooltip("Di atas ambang kritis, gauge naik lebih cepat. Isi 1 untuk mematikan.")]
+    [SerializeField, Min(1f)]
+    private float criticalRiseMultiplier = 1.5f;
+
+    [SerializeField] private CanvasGroup warningChip;
+
+
+    // =====================================
+    // KOMBO
+    // =====================================
+
+    [Header("Kombo Membersihkan")]
+    [SerializeField] private TMP_Text comboText;
+
+    [SerializeField, Min(0f)]
+    private float comboWindow = 8f;
+
+    [SerializeField, Min(1)]
+    private int maxCombo = 5;
+
+    [Tooltip("Tambahan pengurangan gauge per level kombo (0.25 = +25%)")]
+    [SerializeField, Min(0f)]
+    private float comboBonusPerLevel = 0.25f;
+
+
+    // =====================================
+    // NILAI AWAL GAUGE
+    // =====================================
+
+    [Header("Nilai Awal Gauge (0-100)")]
+
+    [SerializeField, Range(0f, 100f)]
+    private float globalStartingContamination = 0f;
+
+    [SerializeField, Range(0f, 100f)]
+    private float localStartingContamination = 0f;
+
+    private float globalContamination;
+    private float localContamination;
+
+
+    // =====================================
+    // KENAIKAN NORMAL
+    // =====================================
 
     [Header("Kenaikan Normal per Detik")]
+
     [SerializeField, Min(0f)]
     private float globalRisePerSecond = 0.4f;
 
     [SerializeField, Min(0f)]
     private float localRisePerSecond = 0.8f;
 
+
+    // =====================================
+    // DETEKSI PEMAIN DIAM
+    // =====================================
+
     [Header("Deteksi Pemain Diam")]
+
     [SerializeField] private Transform player;
 
     [SerializeField, Min(0f)]
@@ -41,7 +159,13 @@ public class ContaminationGaugeManager : MonoBehaviour
     [SerializeField, Min(0f)]
     private float idleLocalBonusPerSecond = 2f;
 
+
+    // =====================================
+    // PENALTI GAGAL MENYAPU
+    // =====================================
+
     [Header("Penalti Gagal Menyapu")]
+
     [SerializeField, Min(0f)]
     private float failedGlobalPenalty = 4f;
 
@@ -57,25 +181,106 @@ public class ContaminationGaugeManager : MonoBehaviour
     [SerializeField, Min(0f)]
     private float failureLocalBonusPerSecond = 3f;
 
+
+    // =====================================
+    // PENGURANGAN SAAT BERHASIL
+    // =====================================
+
     [Header("Pengurangan Saat Berhasil")]
+
     [SerializeField, Min(0f)]
     private float globalDecreasePerClean = 2f;
 
     [SerializeField, Min(0f)]
     private float localDecreasePerClean = 12f;
 
-    [Header("Bad Ending / Game Over")]
-    [SerializeField] private GameObject gameOverPanel;
+
+    // =====================================
+    // PANEL GAME OVER
+    // =====================================
+
+    [Header("Bad Ending - Global 100%")]
+    [SerializeField] private GameObject badEndingPanel;
+    [SerializeField] private TMP_Text badEndingStatsText;
+
+    [Header("Game Over - Local 100%")]
+    [SerializeField] private GameObject localGameOverPanel;
+    [SerializeField] private TMP_Text gameOverStatsText;
+
+
+    // =====================================
+    // PRIVATE VARIABLES
+    // =====================================
 
     private bool isGameOver = false;
+    private bool sectorEnded = false;
 
     private Vector3 lastPlayerPosition;
     private float idleTimer;
     private float failureBoostTimer;
+
+    private float shownGlobal;
+    private float shownLocal;
+    private int lastGlobalText = -1;
+    private int lastLocalText = -1;
+
+    private int combo = 0;
+    private float lastCleanTime;
+
+    private float elapsedTime = 0f;
+    private int cleanCount = 0;
+
+
+    // =====================================
+    // PROPERTI PUBLIK
+    // =====================================
+
+    public bool IsGameOver => isGameOver;
+    public float GlobalValue => globalContamination;
+    public float LocalValue => localContamination;
+    public float ElapsedTime => elapsedTime;
+    public int CleanCount => cleanCount;
+
+
+    // =====================================
+    // START
+    // =====================================
+
     private void Start()
     {
-        // Pastikan permainan berjalan normal.
         Time.timeScale = 1f;
+
+        // Inisialisasi Global jika belum ada sesi aktif.
+        if (!globalProgressInitialized)
+        {
+            savedGlobalContamination = Mathf.Clamp(
+                globalStartingContamination,
+                0f,
+                100f
+            );
+
+            globalProgressInitialized = true;
+        }
+
+        // Ambil Global Gauge yang tersimpan.
+        globalContamination = Mathf.Clamp(
+            savedGlobalContamination,
+            0f,
+            100f
+        );
+
+        // Catat Global saat sektor dimulai.
+        globalAtSectorStart = globalContamination;
+
+        // Local Gauge menggunakan nilai awal sektor.
+        localContamination = Mathf.Clamp(
+            localStartingContamination,
+            0f,
+            100f
+        );
+
+        shownGlobal = globalContamination;
+        shownLocal = localContamination;
 
         // Cari Player secara otomatis jika belum diisi.
         if (player == null)
@@ -96,32 +301,51 @@ public class ContaminationGaugeManager : MonoBehaviour
         else
         {
             Debug.LogWarning(
-                "Player belum ditemukan! Pastikan Tag Player sudah benar."
+                "Player tidak ditemukan! Periksa Tag Player."
             );
         }
 
-        // Atur Slider.
-        SetupSlider(globalGaugeSlider);
-        SetupSlider(localGaugeSlider);
+        // Atur Image Fill.
+        SetupFillImage(globalGaugeFill);
+        SetupFillImage(localGaugeFill);
 
-        // Sembunyikan panel Game Over.
-        if (gameOverPanel != null)
-        {
-            gameOverPanel.SetActive(false);
-        }
+        // Sembunyikan panel dan peringatan saat awal.
+        if (badEndingPanel != null)
+            badEndingPanel.SetActive(false);
 
-        // Perbarui tampilan gauge.
-        UpdateGaugeUI();
+        if (localGameOverPanel != null)
+            localGameOverPanel.SetActive(false);
+
+        if (warningChip != null)
+            warningChip.alpha = 0f;
+
+        UpdateComboUI();
+        AnimateUI();
+
+        // Periksa apakah Global atau Lokal sudah penuh.
+        CheckGameOver();
     }
+
+
+    // =====================================
+    // UPDATE
+    // =====================================
+
     private void Update()
     {
-        // Jangan jalankan sistem jika sudah Game Over.
-        if (isGameOver)
+        // Animasi UI selalu berjalan (memakai unscaled time).
+        AnimateUI();
+
+        if (isGameOver || sectorEnded)
             return;
 
         float deltaTime = Time.deltaTime;
 
-        // Periksa apakah Player sedang diam.
+        elapsedTime += deltaTime;
+
+        UpdateComboExpiry();
+
+        // Periksa aktivitas Player.
         UpdateIdleTimer(deltaTime);
 
         bool isIdle = idleTimer >= idleGracePeriod;
@@ -149,29 +373,35 @@ public class ContaminationGaugeManager : MonoBehaviour
             );
         }
 
-        // Naikkan Gauge Global.
+        // Di atas ambang kritis, gauge naik lebih cepat.
+        if (globalContamination >= criticalThreshold)
+            globalRate *= criticalRiseMultiplier;
+
+        if (localContamination >= criticalThreshold)
+            localRate *= criticalRiseMultiplier;
+
         globalContamination = Mathf.Clamp(
             globalContamination + globalRate * deltaTime,
             0f,
             100f
         );
 
-        // Naikkan Gauge Lokal.
         localContamination = Mathf.Clamp(
             localContamination + localRate * deltaTime,
             0f,
             100f
         );
 
-        // Perbarui UI.
-        UpdateGaugeUI();
+        SaveGlobalProgress();
 
-        // Periksa apakah Gauge Global sudah mencapai 100%.
-        if (globalContamination >= 100f)
-        {
-            TriggerGameOver();
-        }
+        // Periksa Game Over.
+        CheckGameOver();
     }
+
+
+    // =====================================
+    // DETEKSI PEMAIN DIAM
+    // =====================================
 
     private void UpdateIdleTimer(float deltaTime)
     {
@@ -184,24 +414,27 @@ public class ContaminationGaugeManager : MonoBehaviour
         if (distanceSquared >=
             movementThreshold * movementThreshold)
         {
-            // Player bergerak, reset waktu diam.
+            // Player bergerak.
             idleTimer = 0f;
-
             lastPlayerPosition = player.position;
         }
         else
         {
-            // Player tidak bergerak.
+            // Player diam.
             idleTimer += deltaTime;
         }
     }
 
+
+    // =====================================
+    // PLAYER MELAKUKAN AKTIVITAS
+    // =====================================
+
     public void RegisterActivity()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
-        // Reset waktu diam ketika Player menyapu.
         idleTimer = 0f;
 
         if (player != null)
@@ -210,126 +443,300 @@ public class ContaminationGaugeManager : MonoBehaviour
         }
     }
 
+
+    // =====================================
+    // PLAYER GAGAL MENYAPU
+    // =====================================
+
     public void RegisterFailedSweep()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
-        // Penalti langsung pada Gauge Global.
         globalContamination = Mathf.Clamp(
             globalContamination + failedGlobalPenalty,
             0f,
             100f
         );
 
-        // Penalti langsung pada Gauge Lokal.
         localContamination = Mathf.Clamp(
             localContamination + failedLocalPenalty,
             0f,
             100f
         );
 
-        // Gauge naik lebih cepat selama beberapa detik.
+        // Aktifkan kenaikan tambahan sementara.
         failureBoostTimer = failureBoostDuration;
 
-        UpdateGaugeUI();
+        // Gagal memutus kombo.
+        combo = 0;
+        UpdateComboUI();
 
-        Debug.Log(
-            "Gagal menyapu! Kontaminasi meningkat."
-        );
+        SaveGlobalProgress();
 
-        // Periksa Game Over setelah penalti.
-        if (globalContamination >= 100f)
-        {
-            TriggerGameOver();
-        }
+        CheckGameOver();
     }
+
+
+    // =====================================
+    // PLAYER BERHASIL MEMBERSIHKAN DEBU
+    // =====================================
 
     public void RegisterCleaningSuccess()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
-        // Kurangi Gauge Global.
+        // Kombo: bersihkan berturut-turut agar pengurangan makin besar.
+        if (combo > 0 && Time.time - lastCleanTime > comboWindow)
+            combo = 0;
+
+        combo = Mathf.Min(combo + 1, maxCombo);
+        lastCleanTime = Time.time;
+
+        float multiplier = 1f + (combo - 1) * comboBonusPerLevel;
+
         globalContamination = Mathf.Clamp(
-            globalContamination - globalDecreasePerClean,
+            globalContamination - globalDecreasePerClean * multiplier,
             0f,
             100f
         );
 
-        // Kurangi Gauge Lokal.
         localContamination = Mathf.Clamp(
-            localContamination - localDecreasePerClean,
+            localContamination - localDecreasePerClean * multiplier,
             0f,
             100f
         );
 
-        // Reset waktu diam.
+        cleanCount++;
+
+        UpdateComboUI();
+
         RegisterActivity();
 
-        UpdateGaugeUI();
-
-        Debug.Log(
-            "Berhasil membersihkan debu! Kontaminasi berkurang."
-        );
+        SaveGlobalProgress();
     }
 
-    private void SetupSlider(Slider slider)
+
+    // =====================================
+    // SEKTOR SELESAI (DIPANGGIL PlayerSweep)
+    // =====================================
+
+    public void StopSector()
     {
-        if (slider == null)
+        sectorEnded = true;
+
+        SaveGlobalProgress();
+        SnapUI();
+    }
+
+
+    // =====================================
+    // KOMBO
+    // =====================================
+
+    private void UpdateComboExpiry()
+    {
+        if (combo > 0 && Time.time - lastCleanTime > comboWindow)
+        {
+            combo = 0;
+            UpdateComboUI();
+        }
+    }
+
+    private void UpdateComboUI()
+    {
+        if (comboText == null)
             return;
 
-        slider.minValue = 0f;
-        slider.maxValue = 100f;
+        comboText.text = combo > 1 ? "KOMBO ×" + combo : "";
     }
 
-    private void UpdateGaugeUI()
+
+    // =====================================
+    // SIMPAN GLOBAL GAUGE
+    // =====================================
+
+    private void SaveGlobalProgress()
     {
-        if (globalGaugeSlider != null)
+        savedGlobalContamination = globalContamination;
+    }
+
+
+    // =====================================
+    // PERIKSA KONDISI GAME OVER
+    // =====================================
+
+    private void CheckGameOver()
+    {
+        // Global memiliki prioritas tertinggi.
+        if (globalContamination >= 100f)
         {
-            globalGaugeSlider.value = globalContamination;
+            TriggerBadEnding();
+            return;
         }
 
-        if (localGaugeSlider != null)
+        // Jika Global belum penuh, periksa Lokal.
+        if (localContamination >= 100f)
         {
-            localGaugeSlider.value = localContamination;
-        }
-
-        if (globalGaugeText != null)
-        {
-            globalGaugeText.text =
-                $"Global: {Mathf.RoundToInt(globalContamination)}%";
-        }
-
-        if (localGaugeText != null)
-        {
-            localGaugeText.text =
-                $"Lokal: {Mathf.RoundToInt(localContamination)}%";
+            TriggerLocalGameOver();
         }
     }
 
-    private void TriggerGameOver()
+
+    // =====================================
+    // BAD ENDING - GLOBAL 100%
+    // =====================================
+
+    private void TriggerBadEnding()
     {
-        if (isGameOver)
+        if (isGameOver || sectorEnded)
             return;
 
         isGameOver = true;
 
-        Debug.Log(
-            "GAME OVER! Kontaminasi Global mencapai 100%."
-        );
-
-        // Pastikan Gauge Global menunjukkan 100%.
         globalContamination = 100f;
-        UpdateGaugeUI();
 
-        // Tampilkan Panel Game Over.
-        if (gameOverPanel != null)
+        SaveGlobalProgress();
+        SnapUI();
+
+        Debug.Log("BAD ENDING! Global Contamination mencapai 100%.");
+
+        ShowEndPanel(badEndingPanel, badEndingStatsText);
+    }
+
+
+    // =====================================
+    // GAME OVER - LOCAL 100%
+    // =====================================
+
+    private void TriggerLocalGameOver()
+    {
+        if (isGameOver || sectorEnded)
+            return;
+
+        isGameOver = true;
+
+        localContamination = 100f;
+
+        SnapUI();
+
+        Debug.Log("GAME OVER! Local Contamination mencapai 100%.");
+
+        ShowEndPanel(localGameOverPanel, gameOverStatsText);
+    }
+
+    private void ShowEndPanel(GameObject panel, TMP_Text statsText)
+    {
+        if (statsText != null)
+            statsText.text = BuildStatsLine();
+
+        if (panel != null)
+            StartCoroutine(PanelFader.FadeIn(panel));
+
+        // Hentikan permainan.
+        Time.timeScale = 0f;
+    }
+
+
+    // =====================================
+    // STATISTIK UNTUK LAYAR AKHIR
+    // =====================================
+
+    public string BuildStatsLine()
+    {
+        int seconds = Mathf.FloorToInt(elapsedTime);
+
+        return
+            $"Kotoran bersih  {cleanCount}" +
+            $"        Waktu  {seconds / 60:00}:{seconds % 60:00}" +
+            $"        Gauge Global  {Mathf.RoundToInt(globalContamination)}%";
+    }
+
+
+    // =====================================
+    // PENGATURAN IMAGE FILL
+    // =====================================
+
+    private void SetupFillImage(Image fillImage)
+    {
+        if (fillImage == null)
+            return;
+
+        fillImage.type = Image.Type.Filled;
+
+        fillImage.fillMethod = Image.FillMethod.Horizontal;
+
+        fillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+    }
+
+
+    // =====================================
+    // ANIMASI & TAMPILAN GAUGE
+    // =====================================
+
+    private void SnapUI()
+    {
+        shownGlobal = globalContamination;
+        shownLocal = localContamination;
+
+        AnimateUI();
+    }
+
+    private void AnimateUI()
+    {
+        float step = fillSmoothSpeed * Time.unscaledDeltaTime;
+
+        shownGlobal = Mathf.MoveTowards(
+            shownGlobal, globalContamination, step);
+
+        shownLocal = Mathf.MoveTowards(
+            shownLocal, localContamination, step);
+
+        ApplyGauge(globalGaugeFill, globalGaugeText,
+            shownGlobal, ref lastGlobalText);
+
+        ApplyGauge(localGaugeFill, localGaugeText,
+            shownLocal, ref lastLocalText);
+
+        // Chip peringatan berdenyut saat Lokal kritis.
+        if (warningChip != null)
         {
-            gameOverPanel.SetActive(true);
+            bool critical =
+                !isGameOver &&
+                !sectorEnded &&
+                localContamination >= criticalThreshold;
+
+            warningChip.alpha = critical
+                ? 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 6f)
+                : 0f;
+        }
+    }
+
+    private void ApplyGauge(
+        Image fill, TMP_Text label, float value, ref int lastText)
+    {
+        if (fill != null)
+        {
+            fill.fillAmount = value / 100f;
+            fill.color = GaugeColor(value);
         }
 
-        // Hentikan seluruh waktu permainan.
-        Time.timeScale = 0f;
+        int rounded = Mathf.RoundToInt(value);
+
+        if (label != null && rounded != lastText)
+        {
+            label.text = rounded + "%";
+            lastText = rounded;
+        }
+    }
+
+    private Color GaugeColor(float value)
+    {
+        float t = Mathf.Clamp01(value / 100f);
+
+        return t < 0.5f
+            ? Color.Lerp(lowColor, midColor, t * 2f)
+            : Color.Lerp(midColor, highColor, (t - 0.5f) * 2f);
     }
 }
