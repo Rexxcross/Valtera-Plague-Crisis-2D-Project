@@ -23,6 +23,7 @@ public static class GameProgress
     public const string SectorSelectionScene = "SectorSelection";
 
     private const string UnlockKey = "valtera.unlockedSectors";
+    private const string StarsKeyPrefix = "valtera.stars.";
 
 
     // =====================================
@@ -93,6 +94,10 @@ public static class GameProgress
     public static void ResetProgress()
     {
         PlayerPrefs.DeleteKey(UnlockKey);
+
+        foreach (string scene in SectorScenes)
+            PlayerPrefs.DeleteKey(StarsKeyPrefix + scene);
+
         PlayerPrefs.Save();
         BeginNewRun();
     }
@@ -101,6 +106,22 @@ public static class GameProgress
     // =====================================
     // SEKTOR BERIKUTNYA
     // =====================================
+
+    // =====================================
+    // BINTANG PER SEKTOR (REKOR TERBAIK)
+    // =====================================
+
+    public static int GetStars(string sceneName) =>
+        PlayerPrefs.GetInt(StarsKeyPrefix + sceneName, 0);
+
+    public static void SaveStars(string sceneName, int stars)
+    {
+        if (stars > GetStars(sceneName))
+        {
+            PlayerPrefs.SetInt(StarsKeyPrefix + sceneName, stars);
+            PlayerPrefs.Save();
+        }
+    }
 
     /// <summary>Nama scene sektor berikutnya, atau null jika belum ada / belum masuk Build Settings.</summary>
     public static string NextSectorScene(string currentScene)

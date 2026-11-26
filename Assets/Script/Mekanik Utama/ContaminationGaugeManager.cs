@@ -114,6 +114,13 @@ public class ContaminationGaugeManager : MonoBehaviour
     // NILAI AWAL GAUGE
     // =====================================
 
+    [Header("Efek Item & Peringkat")]
+    [SerializeField] private TMP_Text buffText;
+
+    [Tooltip("Selesai lebih cepat dari waktu ini (detik) = bintang waktu")]
+    [SerializeField, Min(10f)]
+    private float parTimeSeconds = 120f;
+
     [Header("Nilai Awal Gauge (0-100)")]
 
     [SerializeField, Range(0f, 100f)]
@@ -229,6 +236,10 @@ public class ContaminationGaugeManager : MonoBehaviour
 
     private float elapsedTime = 0f;
     private int cleanCount = 0;
+
+    private float freezeTimer = 0f;
+    private int lastBuffSeconds = -1;
+    private bool reachedCritical = false;
 
 
     // =====================================
@@ -378,7 +389,18 @@ public class ContaminationGaugeManager : MonoBehaviour
             globalRate *= criticalRiseMultiplier;
 
         if (localContamination >= criticalThreshold)
+        {
             localRate *= criticalRiseMultiplier;
+            reachedCritical = true;
+        }
+
+        // Item Kapur: gauge berhenti naik sementara.
+        if (freezeTimer > 0f)
+        {
+            freezeTimer = Mathf.Max(0f, freezeTimer - deltaTime);
+            globalRate = 0f;
+            localRate = 0f;
+        }
 
         globalContamination = Mathf.Clamp(
             globalContamination + globalRate * deltaTime,
@@ -515,6 +537,71 @@ public class ContaminationGaugeManager : MonoBehaviour
         RegisterActivity();
 
         SaveGlobalProgress();
+    }
+
+
+    // =====================================
+    // ITEM, TIKUS & GELOMBANG WABAH
+    // =====================================
+
+    // Item Kapur: gauge berhenti naik selama beberapa detik.
+    public void FreezeRise(float seconds)
+    {
+        freezeTimer = Mathf.Max(freezeTimer, seconds);
+    }
+
+    // Item Ramuan: turunkan gauge lokal langsung.
+    public void ReduceLocal(float amount)
+    {
+        if (isGameOver || sectorEnded)
+            return;
+
+        localContamination = Mathf.Clamp(
+            localContamination - amount, 0f, 100f);
+    }
+
+    // Tikus / gelombang wabah: tambah kontaminasi (tidak memutus kombo).
+    public void AddContamination(float local, float global = 0f)
+    {
+        if (isGameOver || sectorEnded)
+            return;
+
+        localContamination = Mathf.Clamp(
+            localContamination + local, 0f, 100f);
+
+        globalContamination = Mathf.Clamp(
+            globalContamination + global, 0f, 100f);
+
+        SaveGlobalProgress();
+
+        CheckGameOver();
+    }
+
+
+    // =====================================
+    // PERINGKAT BINTANG (1-3)
+    // =====================================
+
+    // 1 bintang = selesai.
+    // +1 jika gauge lokal tidak pernah kritis.
+    // +1 jika selesai sebelum waktu target.
+    public int CalculateStars()
+    {
+        int stars = 1;
+
+        if (!reachedCritical)
+            stars++;
+
+        if (elapsedTime <= parTimeSeconds)
+            stars++;
+
+        return stars;
+    }
+
+    public string BuildVictoryLine()
+    {
+        return BuildStatsLine() +
+            $"        Bintang  {CalculateStars()}/3";
     }
 
 
@@ -698,6 +785,20 @@ public class ContaminationGaugeManager : MonoBehaviour
 
         ApplyGauge(localGaugeFill, localGaugeText,
             shownLocal, ref lastLocalText);
+
+        // Teks efek item (sisa waktu).
+        if (buffText != null)
+        {
+            int seconds = Mathf.CeilToInt(freezeTimer);
+
+            if (seconds != lastBuffSeconds)
+            {
+                lastBuffSeconds = seconds;
+                buffText.text = seconds > 0
+                    ? "GAUGE BEKU  " + seconds + "s"
+                    : "";
+            }
+        }
 
         // Chip peringatan berdenyut saat Lokal kritis.
         if (warningChip != null)

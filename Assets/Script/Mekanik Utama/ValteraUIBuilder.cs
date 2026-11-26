@@ -139,7 +139,18 @@ public static class ValteraUIBuilder
 
         // ================= HUD: KOMBO & PETUNJUK =================
         var comboText = Txt(cv, "ComboText", "", 52, Gold, TextAlignmentOptions.Right, FontStyles.Bold, BR, BR, new Vector2(-36f, 36f), new Vector2(520f, 76f));
-        Txt(cv, "ControlsHint", "WASD  Gerak     ·     Shift  Lari     ·     E  Tahan untuk membersihkan", 20, Hex("F3E6C8", 0.75f), TextAlignmentOptions.Left, FontStyles.Normal, BL, BL, new Vector2(32f, 24f), new Vector2(900f, 34f));
+        Txt(cv, "ControlsHint", "WASD  Gerak     ·     Shift  Lari     ·     E  Tahan untuk membersihkan     ·     Spasi  Usir tikus", 20, Hex("F3E6C8", 0.75f), TextAlignmentOptions.Left, FontStyles.Normal, BL, BL, new Vector2(32f, 24f), new Vector2(1300f, 34f));
+
+        // ================= HUD: EFEK ITEM & BANNER GELOMBANG =================
+        var buffText = Txt(cv, "BuffText", "", 30, Hex("9ADBF0"), TextAlignmentOptions.Right, FontStyles.Bold, BR, BR, new Vector2(-36f, 120f), new Vector2(520f, 44f));
+
+        var banner = BorderPanel(cv, "WaveBanner", Danger, Hex("2A0F0F", 0.96f), 2f);
+        Anchor(banner.outer, TC, TC, TC, new Vector2(0f, -250f), new Vector2(780f, 64f));
+        var bannerText = Txt(banner.inner, "Text", "GELOMBANG WABAH!", 30, Hex("FFD9D4"), TextAlignmentOptions.Center, FontStyles.Bold, C, C, Vector2.zero, new Vector2(760f, 50f));
+        var bannerGroup = banner.outer.gameObject.AddComponent<CanvasGroup>();
+        bannerGroup.alpha = 0f;
+        bannerGroup.interactable = false;
+        bannerGroup.blocksRaycasts = false;
 
         // ================= HUD: PROMPT BERSIHKAN =================
         var prompt = BorderPanel(cv, "PromptRoot", Border, PanelFill, 3f);
@@ -198,6 +209,15 @@ public static class ValteraUIBuilder
         SetRef(sweep, "progressText", progressText);
         SetRef(sweep, "sectorCompletePanel", vP);
         SetRef(sweep, "victoryStatsText", vStats);
+
+        SetRef(manager, "buffText", buffText);
+
+        var wave = Object.FindAnyObjectByType<PlagueWaveEvent>();
+        if (wave != null)
+        {
+            SetRef(wave, "bannerGroup", bannerGroup);
+            SetRef(wave, "bannerText", bannerText);
+        }
 
         EditorUtility.SetDirty(manager);
         EditorUtility.SetDirty(sweep);
