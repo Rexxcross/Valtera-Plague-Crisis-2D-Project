@@ -29,22 +29,14 @@ public class PlayerSweep : MonoBehaviour
     [SerializeField] private GameObject sectorCompletePanel;
     [SerializeField] private TMP_Text victoryStatsText;
 
-    [SerializeField] private string sectorSelectionSceneName =
-        "SectorSelection";
-
     private bool sectorCompleted = false;
 
     [Header("Progress Keseluruhan")]
-    [Tooltip("Jika dicentang, jumlah debu dihitung otomatis dari SweepableArea di scene.")]
-    [SerializeField] private bool autoCountDust = true;
-
-    [SerializeField, Min(1)]
-    private int totalDustRequired = 5;
-
     [SerializeField] private TMP_Text progressText;
 
     private SweepableArea currentArea;
-    private int cleanedDust = 0;
+    private int shownCleaned = -1;
+    private int shownTotal = -1;
 
 
     // =====================================
@@ -53,14 +45,6 @@ public class PlayerSweep : MonoBehaviour
 
     private void Start()
     {
-        if (autoCountDust)
-        {
-            totalDustRequired = FindObjectsByType<SweepableArea>(
-                FindObjectsSortMode.None).Length;
-        }
-
-        totalDustRequired = Mathf.Max(1, totalDustRequired);
-
         if (mainCamera == null)
             mainCamera = Camera.main;
 
@@ -111,6 +95,9 @@ public class PlayerSweep : MonoBehaviour
             return;
         }
 
+        // Progres dihitung ulang tiap frame (area bisa dikotori lagi oleh tikus).
+        UpdateProgressText();
+
         if (currentArea != null && currentArea.IsCleaned)
             currentArea = null;
 
@@ -138,11 +125,6 @@ public class PlayerSweep : MonoBehaviour
                 // Debu selesai dibersihkan.
                 if (completed)
                 {
-                    cleanedDust = Mathf.Min(
-                        cleanedDust + 1,
-                        totalDustRequired
-                    );
-
                     // Putar SFX.
                     if (audioSource != null && cleaningSFX != null)
                     {
@@ -160,8 +142,9 @@ public class PlayerSweep : MonoBehaviour
 
                     UpdateProgressText();
 
-                    // Periksa apakah seluruh debu sudah bersih.
-                    if (cleanedDust >= totalDustRequired)
+                    // Sektor selesai jika SEMUA area bersih bersamaan.
+                    if (SweepableArea.CleanedCount >=
+                        SweepableArea.TotalCount)
                     {
                         CompleteSector();
                         return;
@@ -244,8 +227,8 @@ public class PlayerSweep : MonoBehaviour
         }
     }
 
-    // Jika debu sebelumnya selesai dibersihkan saat Player masih
-    // berdiri di dekat debu lain, ambil debu berikutnya.
+    // Mengambil area berikutnya jika Player masih berdiri di dekatnya
+    // (misalnya setelah area dikotori lagi oleh tikus).
     private void OnTriggerStay2D(Collider2D other)
     {
         if (sectorCompleted || currentArea != null)
@@ -327,10 +310,18 @@ public class PlayerSweep : MonoBehaviour
 
     private void UpdateProgressText()
     {
+        int cleaned = SweepableArea.CleanedCount;
+        int total = SweepableArea.TotalCount;
+
+        if (cleaned == shownCleaned && total == shownTotal)
+            return;
+
+        shownCleaned = cleaned;
+        shownTotal = total;
+
         if (progressText != null)
         {
-            progressText.text =
-                $"Kotoran {cleanedDust}/{totalDustRequired}";
+            progressText.text = $"Kotoran {cleaned}/{total}";
         }
     }
 
@@ -351,21 +342,24 @@ public class PlayerSweep : MonoBehaviour
 
         sectorCompleted = true;
 
-        Debug.Log(
-            "VICTORY! Semua debu berhasil dibersihkan."
-        );
+        string sceneName = SceneManager.GetActiveScene().name;
 
-        // Buka sektor berikutnya (tersimpan).
-        GameProgress.CompleteSector(
-            SceneManager.GetActiveScene().name);
+        // Buka sektor berikutnya & simpan bintang (tersimpan).
+        GameProgress.CompleteSector(sceneName);
 
         if (contaminationManager != null)
+        {
             contaminationManager.StopSector();
+
+            GameProgress.SaveStars(
+                sceneName,
+                contaminationManager.CalculateStars());
+        }
 
         HidePrompt();
 
         if (victoryStatsText != null && contaminationManager != null)
-            victoryStatsText.text = contaminationManager.BuildStatsLine();
+            victoryStatsText.text = contaminationManager.BuildVictoryLine();
 
         // Tampilkan panel Victory.
         if (sectorCompletePanel != null)
@@ -388,8 +382,6 @@ public class PlayerSweep : MonoBehaviour
     // NEXT SECTOR
     // =====================================
 
-    // Lanjut ke sektor berikutnya jika sudah ada, jika belum
-    // kembali ke Sector Selection.
     public void NextSector()
     {
         GameProgress.LoadNextSectorOrSelection();
