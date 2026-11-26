@@ -48,10 +48,10 @@ TagManager:
   - name: WalkInFront
     uniqueID: 2277694893
     locked: 0
-  - name: Collision
+  - name: Player
     uniqueID: 3806258293
     locked: 0
-  - name: Player
+  - name: Collision
     uniqueID: 3873163479
     locked: 0
   m_RenderingLayers:
